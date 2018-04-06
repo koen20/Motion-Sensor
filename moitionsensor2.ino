@@ -1,70 +1,92 @@
-/*
- * PIR sensor tester
- */
- #include <Arduino.h>
-
 #include <ESP8266WiFi.h>
-#include <ESP8266WiFiMulti.h>
-#include <stdlib.h>
+#include <PubSubClient.h>
 
-ADC_MODE(ADC_VCC)
+const char* ssid = "";
+const char* password = "";
+const char* mqtt_server = "";
 
-#include <ESP8266HTTPClient.h>
-ESP8266WiFiMulti WiFiMulti;
-#define USE_SERIAL Serial
- 
-//int inputPin = 2;               // choose the input pin (for PIR sensor)
-//int pirState = LOW;             // we start, assuming no motion detected
-//int val = 0;                    // variable for reading the pin status
- 
+const char* mqttUsername = "";
+const char* mqttPassword = "";
+#define INPUT_PIN         4
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+long lastMsg = 0;
+char msg[50];
+int value = 0;
+
 void setup() {
-  //pinMode(inputPin, INPUT);     // declare sensor as input
-  //pinMode(LED_BUILTIN, OUTPUT);
-  USE_SERIAL.begin(115200);
-  USE_SERIAL.println();
-  for(uint8_t t = 4; t > 0; t--) {
-        USE_SERIAL.printf("[SETUP] WAIT %d...\n", t);
-        USE_SERIAL.flush();
-        delay(1000);
-    }
-
-    WiFiMulti.addAP("tada", "88888888");
+  Serial.begin(115200);
+  Serial.println("Starting");
+  pinMode(INPUT_PIN, INPUT);
+  setup_wifi();
+  client.setServer(mqtt_server, 1883);
 }
- 
-void loop(){
-  // wait for WiFi connection
-    if((WiFiMulti.run() == WL_CONNECTED)) {
-        //float vdd = ESP.getVcc();
-        HTTPClient http;
 
-        USE_SERIAL.print("[HTTP] begin...\n");
-        // configure traged server and url
-        //http.begin(, "7a 9c f4 db 40 d3 62 5a 6e 21 bc 5c cc 66 c8 3e a1 45 59 38"); //HTTPS
-        http.begin("http://api.koenhabets.nl/room?enter"); //HTTP
+void loop() {
+  if (!client.connected()) {
+    reconnect();
+  }
+  client.loop();
 
-        USE_SERIAL.print("[HTTP] GET...\n");
-        // start connection and send HTTP header
-        int httpCode = http.GET();
+  //long now = millis();
+  //if (now - lastMsg > 10000) {
+    //lastMsg = now;
+    //++value;
+    //snprintf (msg, 75, "hello world #%ld", value);
+    //Serial.print("Publish message: ");
+    //Serial.println(msg);
+    //client.publish("esp", msg);
+  //}
 
-        // httpCode will be negative on error
-        if(httpCode > 0) {
-            // HTTP header has been send and Server response header has been handled
-            USE_SERIAL.printf("[HTTP] GET... code: %d\n", httpCode);
-
-            // file found at server
-            if(httpCode == HTTP_CODE_OK) {
-                String payload = http.getString();
-                USE_SERIAL.println(payload);
-            }
-        } else {
-            USE_SERIAL.printf("[HTTP] GET... failed, error: %s\n", http.errorToString(httpCode).c_str());
-        }
-
-        http.end();
-        delay(1000);
-        Serial.println("ESP8266 in sleep mode");
-        ESP.deepSleep(0);
+  if(digitalRead(INPUT_PIN) == HIGH){
+    Serial.println("motion");
+    client.publish("home/motion", "motion detected");
+    delay(1000);
     }
+}
 
-    delay(10000);
+void reconnect() {
+  // Loop until we're reconnected
+  while (!client.connected()) {
+    Serial.print("Attempting MQTT connection...");
+    // Create a random client ID
+    String clientId = "ESP8266Client-";
+    clientId += String(random(0xffff), HEX);
+    // Attempt to connect
+    if (client.connect(clientId.c_str(), mqttUsername, mqttPassword)) {
+      Serial.println("connected");
+      // Once connected, publish an announcement...
+      client.publish("esp", "Connected");
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 5 seconds");
+      // Wait 5 seconds before retrying
+      delay(5000);
+    }
+  }
+}
+
+void setup_wifi() {
+
+  delay(10);
+  // We start by connecting to a WiFi network
+  Serial.println();
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  randomSeed(micros());
+
+  Serial.println("");
+  Serial.println("WiFi connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
 }
