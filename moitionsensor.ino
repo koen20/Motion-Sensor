@@ -3,7 +3,7 @@
 
 const char* ssid = "";
 const char* password = "";
-const char* mqtt_server = "";
+const char* mqtt_server = "192.168.2.24";
 
 const char* mqttUsername = "";
 const char* mqttPassword = "";
@@ -14,6 +14,7 @@ PubSubClient client(espClient);
 long lastMsg = 0;
 char msg[50];
 int value = 0;
+long millisMotion;
 
 void setup() {
   Serial.begin(115200);
@@ -29,21 +30,17 @@ void loop() {
   }
   client.loop();
 
-  //long now = millis();
-  //if (now - lastMsg > 10000) {
-    //lastMsg = now;
-    //++value;
-    //snprintf (msg, 75, "hello world #%ld", value);
-    //Serial.print("Publish message: ");
-    //Serial.println(msg);
-    //client.publish("esp", msg);
-  //}
-
   if(digitalRead(INPUT_PIN) == HIGH){
-    Serial.println("motion");
-    client.publish("home/motion", "motion detected");
-    delay(1000);
+    long dif = millis() - millisMotion;
+    if(dif > 4000 && dif < 50000){
+      Serial.println("motion");
+      client.publish("home/motion", "motion detected");
+      delay(1000);
+      millisMotion = millis();
+    } else if(dif >= 5000){
+      millisMotion = millis();
     }
+  }
 }
 
 void reconnect() {
@@ -77,6 +74,7 @@ void setup_wifi() {
   Serial.println(ssid);
 
   WiFi.begin(ssid, password);
+  WiFi.mode(WIFI_STA);
 
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
